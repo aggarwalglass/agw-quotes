@@ -149,7 +149,11 @@ const blankG = () => ({id:"", name:"", desc:"", rate:"", hsn:"", gst:18});
 const blankC = () => ({id:"", name:"", adj:""});
 const blankP = () => ({name:"", code:"", price:"", unit:"Nos", hsn:"", gst:18, category:""});
 let db = null, downloads = null, user = null, canEditPrices = false;
-const RANGES = [{id:"imported", label:"Imported", doc:"blandox/prices"}, {id:"vixor", label:"Vixor", doc:"blandox/vixor"}, {id:"closma", label:"Closma", doc:"blandox/closma"}];
+const RANGES = [{id:"imported", label:"Imported", brand:"Imported", doc:"blandox/prices"}, {id:"vixor", label:"Vixor", brand:"Vixor", doc:"blandox/vixor"},
+  {id:"closma4516", label:"Closma 4516", brand:"Closma", doc:"blandox/closma4516"}, {id:"closma4507", label:"Closma 4507", brand:"Closma", doc:"blandox/closma4507"},
+  {id:"closma3516", label:"Closma 3516", brand:"Closma", doc:"blandox/closma3516"}, {id:"closma4010", label:"Closma 4010", brand:"Closma", doc:"blandox/closma4010"}];
+const costDisc = m => num((state.prices||{}).costDisc) || ({imported:60})[m && m.range] || 0;
+const rangeBrand = id => (RANGES.find(r => r.id===id) || RANGES[0]).brand;
 let state = { priceDocs:{}, bx:null, bxMsg:"", glass:[], colours:[], gForm:blankG(), cForm:blankC(), pForm:blankP(), confirmOpt:null, view:"quotes", quotes:[], clients:[], products:[], importMsg:"", firm:{...DEFAULT_FIRM}, loaded:false, slow:false, error:"", search:"", edit:null, dirty:false, confirmDel:false };
 
 /* ---------- money ---------- */
@@ -268,7 +272,8 @@ function bxItems(m){ const r = bxQuote(m); if(r.err) return null;
   const G = r.glass;
   const glassTxt = G ? `Glass in ${G.lines.length} part${G.lines.length>1?"s":""}: ` + G.lines.map(l => `${l.glass}${l.desc ? ` (${l.desc})` : ""}`).join("; ") + "." + (G.divAmt ? " Divider strip between parts." : "") : "";
   const desc = [r.unit==="Set" ? `Size: ${r.text}.` : r.unit==="Rft" ? `Length: ${r.text}.` : "", `Colour: ${r.colour}.`, r.unit==="Set" ? (G ? glassTxt : "Glass not included.") : ""].filter(Boolean).join(" ");
-  return [{name: G ? r.name + " with glass" : r.name, desc, hsn:"", qty:r.qty, unit:r.unit, rate:r.rate, disc:0, gst:18, slim:{system:m.sys, width:m.w, widthUnit:m.wu, height:m.h, heightUnit:m.hu, colour:r.colour, priced:r.priced, special:!!r.special, room: String(m.room||"").trim(), range: m.range || "imported", defH: num((state.prices||{}).defaultHeightFt) || 10, profileRate: G ? r.profileRate : r.rate, glass: G ? G.lines : [], dividerRft: G ? G.divLen : 0, dividerAmt: G ? G.divAmt : 0}}];
+  const brand = rangeBrand(m.range);
+  return [{name: brand + " " + (G ? r.name + " with glass" : r.name), desc, hsn:"", qty:r.qty, unit:r.unit, rate:r.rate, disc:0, gst:18, slim:{system:m.sys, width:m.w, widthUnit:m.wu, height:m.h, heightUnit:m.hu, colour:r.colour, priced:r.priced, special:!!r.special, room: String(m.room||"").trim(), range: m.range || "imported", defH: num((state.prices||{}).defaultHeightFt) || 10, profileRate: G ? r.profileRate : r.rate, glass: G ? G.lines : [], dividerRft: G ? G.divLen : 0, dividerAmt: G ? G.divAmt : 0}}];
 }
 function bxEditor(){ const m = state.bx;
   const rangeSel = `<label class="f" style="grid-column:1/-1">Range<select id="bx-range" data-bx="range">${RANGES.map(R => `<option value="${R.id}" ${(m.range||"imported")===R.id ? "selected" : ""} ${state.priceDocs[R.id] ? "" : "disabled"}>${R.label}${state.priceDocs[R.id] ? "" : " (prices coming soon)"}</option>`).join("")}</select></label>`;
@@ -299,6 +304,7 @@ function bxOutHtml(m, r){
   if(r.err) return `<div class="row bx-out"><span class="${m.sys?"bx-err":"note"}">${esc(r.err)}</span></div>`;
   return `<div class="row bx-out"><span style="min-width:0">${esc(r.name)}<br><span class="note">${esc(rangeLabel(m.range))} · ${esc(r.text)}${r.unit==="Set" ? " · priced as "+esc(r.priced) : ""} · ${esc(r.colour)}${r.adj ? ` (${r.adj>0?"+":""}${r.adj}%)` : ""}</span></span><span class="spacer"></span><b>Rs. ${inr(r.profileRate ?? r.rate,0)}${r.unit==="Rft" ? " / rft" : ""}</b></div>
   ${r.glass ? r.glass.lines.map((l,i)=>`<div class="row bx-out"><span class="note" style="min-width:0">Part ${i+1}: ${esc(l.glass)}${l.desc ? " ("+esc(l.desc)+")" : ""} · ${inr(l.area)} sq ft × Rs. ${inr(l.rate,0)}</span><span class="spacer"></span><span>Rs. ${inr(l.amt,0)}</span></div>`).join("") + (r.glass.divAmt ? `<div class="row bx-out"><span class="note">Divider strips ${inr(r.glass.divLen)} rft × Rs. ${inr(r.glass.divRate,0)}</span><span class="spacer"></span><span>Rs. ${inr(r.glass.divAmt,0)}</span></div>` : "") + `<div class="row bx-out"><span>Price per set (profile + glass)</span><span class="spacer"></span><b>Rs. ${inr(r.rate,0)}</b></div>` + (r.glass.n>1 ? `<div class="row bx-out"><span class="note">× ${r.glass.n} sets</span><span class="spacer"></span><b>Rs. ${inr(r.rate*r.glass.n,0)}</b></div>` : "") : ""}
+  ${gate.isAdmin && state.prices && costDisc(m) && r.unit ? `<div class="row bx-out"><span class="note">Our cost (owner only): profile ${costDisc(m)}% off MRP, GST extra</span><span class="spacer"></span><span class="note">Rs. ${inr(Math.round((r.profileRate ?? r.rate)*(1-costDisc(m)/100)),0)}</span></div>` : ""}
   ${r.special ? `<div class="bx-warn">This height needs an extra-long side profile. The price is an estimate; confirm it before sending.</div>` : ""}`;
 }
 function viewOptions(){
@@ -584,7 +590,7 @@ function itemHtml(it, i, r){
   return `<div class="item" data-i="${i}">
     <div class="n">${i+1}</div>
     <div class="fields">
-      ${it.slim && it.slim.range ? `<div class="note" style="grid-column:1/-1">Slim profile range: <b>${esc(rangeLabel(it.slim.range))}</b> (for your reference, not printed)</div>` : ""}
+      ${it.slim && it.slim.range ? `<div class="note" style="grid-column:1/-1">Slim profile range: <b>${esc(rangeLabel(it.slim.range))}</b></div>` : ""}
       <label class="f nm">Item<input id="it-name-${i}" data-k="name" list="productList" value="${esc(it.name)}" placeholder="Type to pick a product, or write your own"></label>
       <label class="f">HSN<input id="it-hsn-${i}" data-k="hsn" value="${esc(it.hsn)}" inputmode="numeric"></label>
       <label class="f">Qty<input id="it-qty-${i}" data-k="qty" type="text" inputmode="decimal" autocomplete="off" value="${esc(it.qty)}"></label>
@@ -893,7 +899,7 @@ function drawSystem(doc, it, x, y, w, h){
     const hBlank = String(s.height ?? "").trim()==="";
     const wft = toMm(s.width, s.widthUnit||"FT")/304.8 || 8;
     const hft = hBlank ? (num(s.defH)||num(P.defaultHeightFt)||10) : (toMm(s.height, s.heightUnit||"FT")/304.8 || 8);
-    const layouts = {"SYNCHRO":["F","S<","S>","F"], "2+1":["F","S<","S<"], "3+1":["F","S<","S<","S<"], "ONE FIX AND SLIDE":["F","S<"], "SINGLE SLIDE":["S<"], "SWING DOOR":["W"], "FIX PARTITION WITHOUT TRACK":["F"], "FIX PARTITION WITH TRACK":["F"]};
+    const layouts = {"SYNCHRO":["F","S<","S>","F"], "2+1":["F","S<","S<"], "3+1":["F","S<","S<","S<"], "ONE FIX AND SLIDE":["F","S<"], "SINGLE SLIDE":["S<"], "4+1":["F","S<","S<","S<","S<"], "5+1":["F","S<","S<","S<","S<","S<"], "2+4 SYNCHRO":["F","S<","S<","S>","S>","F"], "2+6 SYNCHRO":["F","S<","S<","S<","S>","S>","S>","F"], "SWING DOOR":["W"], "FIX PARTITION WITHOUT TRACK":["F"], "FIX PARTITION WITH TRACK":["F"]};
     const panels = layouts[sys] || ["F"];
     const hasTrack = sys==="FIX PARTITION WITH TRACK" || panels.some(p => p[0]==="S");
     const padL = 5, padB = 5, padT = hasTrack ? 2 : 0.5;
@@ -966,7 +972,7 @@ async function saveFile(name, blob){
 }
 /* ---------- premium PDF (cover, product sheets, elevations, quotation) ---------- */
 const PX = { cream:[251,249,244], gold:[155,120,76], ink:[42,41,38], mute:[128,122,112], rule:[218,204,180], soft:[249,246,240] };
-const SYS_LAYOUTS = {"SYNCHRO":["F","S<","S>","F"], "2+1":["F","S<","S<"], "3+1":["F","S<","S<","S<"], "ONE FIX AND SLIDE":["F","S<"], "SINGLE SLIDE":["S<"], "SWING DOOR":["W"], "FIX PARTITION WITHOUT TRACK":["F"], "FIX PARTITION WITH TRACK":["F"]};
+const SYS_LAYOUTS = {"SYNCHRO":["F","S<","S>","F"], "2+1":["F","S<","S<"], "3+1":["F","S<","S<","S<"], "ONE FIX AND SLIDE":["F","S<"], "SINGLE SLIDE":["S<"], "4+1":["F","S<","S<","S<","S<"], "5+1":["F","S<","S<","S<","S<","S<"], "2+4 SYNCHRO":["F","S<","S<","S>","S>","F"], "2+6 SYNCHRO":["F","S<","S<","S<","S>","S>","S>","F"], "SWING DOOR":["W"], "FIX PARTITION WITHOUT TRACK":["F"], "FIX PARTITION WITH TRACK":["F"]};
 const isSlimIt = it => !!(it && (it.slim||it.blandox));
 const pad2 = n => String(n).padStart(2,"0");
 const nIN = n => Math.round(n).toLocaleString("en-IN");
@@ -1055,7 +1061,7 @@ function pxCard(doc, x, no, y0, gOn){
     const ls = (Array.isArray(val) ? val : [val]).flatMap(v => doc.splitTextToSize(v, tw)).slice(0,4); doc.text(ls, tx, y); y += (ls.length-1)*3.9;
     if(sub){ y += 3.8; doc.setFontSize(7.5); doc.setTextColor(...PX.mute); doc.text(sub, tx, y); }
     y += 5.2; };
-  field("SYSTEM", slim(s.system||""));
+  field("SYSTEM", (s.range ? rangeBrand(s.range) + " · " : "") + slim(s.system||""));
   field("SIZE", d.entered, d.mmTxt);
   field("QUANTITY", it.unit==="Set" || !it.unit ? `${num(it.qty)} identical set${num(it.qty)>1?"s":""}` : `${num(it.qty)} ${it.unit}`);
   field("PROFILE", colour);
