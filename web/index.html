@@ -149,7 +149,8 @@ const blankG = () => ({id:"", name:"", desc:"", rate:"", hsn:"", gst:18});
 const blankC = () => ({id:"", name:"", adj:""});
 const blankP = () => ({name:"", code:"", price:"", unit:"Nos", hsn:"", gst:18, category:""});
 let db = null, downloads = null, user = null, canEditPrices = false;
-let state = { prices:null, bx:null, bxMsg:"", glass:[], colours:[], gForm:blankG(), cForm:blankC(), pForm:blankP(), confirmOpt:null, view:"quotes", quotes:[], clients:[], products:[], importMsg:"", firm:{...DEFAULT_FIRM}, loaded:false, slow:false, error:"", search:"", edit:null, dirty:false, confirmDel:false };
+const RANGES = [{id:"imported", label:"Imported", doc:"blandox/prices"}, {id:"vixor", label:"Vixor", doc:"blandox/vixor"}, {id:"closma", label:"Closma", doc:"blandox/closma"}];
+let state = { priceDocs:{}, bx:null, bxMsg:"", glass:[], colours:[], gForm:blankG(), cForm:blankC(), pForm:blankP(), confirmOpt:null, view:"quotes", quotes:[], clients:[], products:[], importMsg:"", firm:{...DEFAULT_FIRM}, loaded:false, slow:false, error:"", search:"", edit:null, dirty:false, confirmDel:false };
 
 /* ---------- money ---------- */
 function calc(q){
@@ -191,6 +192,9 @@ const BX_UNITS = ["INCH","FT","MM"];
 const toMm = (v,u) => num(v)*(u==="MM"?1:u==="INCH"?25.4:304.8);
 const ft1 = x => String(Math.round(x*100)/100);
 const parseRs = s => num(String(s??"").replace(/[^\d.\-]/g,""));
+Object.defineProperty(state, "prices", { get(){ const r = (state.bx && state.bx.range) || "imported"; return state.priceDocs[r] || null; }, set(v){ state.priceDocs.imported = v; } });
+const rangeLabel = id => (RANGES.find(r => r.id===id) || RANGES[0]).label;
+const anyPrices = () => RANGES.some(r => state.priceDocs[r.id]);
 function bxSystems(){ const P=state.prices; if(!P) return []; return [...(P.systems||[]).map(s=>s.name), ...new Set((P.acc||[]).map(a=>a.system)), ...(P.rft||[]).map(r=>r.system)]; }
 function bxPrice(m){
   const P = state.prices; if(!P) return {err:"Slim profile prices are not loaded yet."};
@@ -264,9 +268,12 @@ function bxItems(m){ const r = bxQuote(m); if(r.err) return null;
   const G = r.glass;
   const glassTxt = G ? `Glass in ${G.lines.length} part${G.lines.length>1?"s":""}: ` + G.lines.map(l => `${l.glass}${l.desc ? ` (${l.desc})` : ""}`).join("; ") + "." + (G.divAmt ? " Divider strip between parts." : "") : "";
   const desc = [r.unit==="Set" ? `Size: ${r.text}.` : r.unit==="Rft" ? `Length: ${r.text}.` : "", `Colour: ${r.colour}.`, r.unit==="Set" ? (G ? glassTxt : "Glass not included.") : ""].filter(Boolean).join(" ");
-  return [{name: G ? r.name + " with glass" : r.name, desc, hsn:"", qty:r.qty, unit:r.unit, rate:r.rate, disc:0, gst:18, slim:{system:m.sys, width:m.w, widthUnit:m.wu, height:m.h, heightUnit:m.hu, colour:r.colour, priced:r.priced, special:!!r.special, room: String(m.room||"").trim(), profileRate: G ? r.profileRate : r.rate, glass: G ? G.lines : [], dividerRft: G ? G.divLen : 0, dividerAmt: G ? G.divAmt : 0}}];
+  return [{name: G ? r.name + " with glass" : r.name, desc, hsn:"", qty:r.qty, unit:r.unit, rate:r.rate, disc:0, gst:18, slim:{system:m.sys, width:m.w, widthUnit:m.wu, height:m.h, heightUnit:m.hu, colour:r.colour, priced:r.priced, special:!!r.special, room: String(m.room||"").trim(), range: m.range || "imported", defH: num((state.prices||{}).defaultHeightFt) || 10, profileRate: G ? r.profileRate : r.rate, glass: G ? G.lines : [], dividerRft: G ? G.divLen : 0, dividerAmt: G ? G.divAmt : 0}}];
 }
-function bxEditor(){ const m = state.bx, r = bxQuote(m), sys = bxSystems(), P = state.prices;
+function bxEditor(){ const m = state.bx;
+  const rangeSel = `<label class="f" style="grid-column:1/-1">Range<select id="bx-range" data-bx="range">${RANGES.map(R => `<option value="${R.id}" ${(m.range||"imported")===R.id ? "selected" : ""} ${state.priceDocs[R.id] ? "" : "disabled"}>${R.label}${state.priceDocs[R.id] ? "" : " (prices coming soon)"}</option>`).join("")}</select></label>`;
+  if(!state.prices) return `<div class="bx" id="bxPanel"><div class="row"><h2 style="margin:0">Add slim profile system</h2><span class="spacer"></span><button class="btn ghost" id="bxClose">Close</button></div><div class="grid">${rangeSel}</div><p class="note">${esc(rangeLabel(m.range))} prices are not loaded yet. Pick another range.</p></div>`;
+  const r = bxQuote(m), sys = bxSystems(), P = state.prices;
   const isRft = (P.rft||[]).some(x=>x.system===m.sys), isAcc = (P.acc||[]).some(x=>x.system===m.sys), isHandle = m.sys==="HANDLE";
   const isSys = !!m.sys && !isRft && !isAcc;
   const unitSel = (id,k,v) => `<select id="${id}" data-bx="${k}">${BX_UNITS.map(u=>`<option ${v===u?"selected":""}>${u}</option>`).join("")}</select>`;
@@ -274,6 +281,7 @@ function bxEditor(){ const m = state.bx, r = bxQuote(m), sys = bxSystems(), P = 
 
   return `<div class="bx" id="bxPanel"><div class="row"><h2 style="margin:0">Add slim profile system</h2><span class="spacer"></span><button class="btn ghost" id="bxClose">Close</button></div>
   <div class="grid">
+   ${rangeSel}
    <label class="f" style="grid-column:1/-1">System<select id="bx-sys" data-bx="sys"><option value="">Choose a system or accessory</option>${sys.map(s=>`<option ${m.sys===s?"selected":""}>${esc(s)}</option>`).join("")}</select></label>
    ${isAcc && !isHandle ? "" : `<label class="f">${isRft?"Running length":isHandle?"Handle length":"Width"}<input id="bx-w" data-bx="w" type="text" inputmode="decimal" autocomplete="off" value="${esc(m.w)}"></label>
    <label class="f">Unit${unitSel("bx-wu","wu",m.wu)}</label>`}
@@ -289,7 +297,7 @@ function bxEditor(){ const m = state.bx, r = bxQuote(m), sys = bxSystems(), P = 
 }
 function bxOutHtml(m, r){
   if(r.err) return `<div class="row bx-out"><span class="${m.sys?"bx-err":"note"}">${esc(r.err)}</span></div>`;
-  return `<div class="row bx-out"><span style="min-width:0">${esc(r.name)}<br><span class="note">${esc(r.text)}${r.unit==="Set" ? " · priced as "+esc(r.priced) : ""} · ${esc(r.colour)}${r.adj ? ` (${r.adj>0?"+":""}${r.adj}%)` : ""}</span></span><span class="spacer"></span><b>Rs. ${inr(r.profileRate ?? r.rate,0)}${r.unit==="Rft" ? " / rft" : ""}</b></div>
+  return `<div class="row bx-out"><span style="min-width:0">${esc(r.name)}<br><span class="note">${esc(rangeLabel(m.range))} · ${esc(r.text)}${r.unit==="Set" ? " · priced as "+esc(r.priced) : ""} · ${esc(r.colour)}${r.adj ? ` (${r.adj>0?"+":""}${r.adj}%)` : ""}</span></span><span class="spacer"></span><b>Rs. ${inr(r.profileRate ?? r.rate,0)}${r.unit==="Rft" ? " / rft" : ""}</b></div>
   ${r.glass ? r.glass.lines.map((l,i)=>`<div class="row bx-out"><span class="note" style="min-width:0">Part ${i+1}: ${esc(l.glass)}${l.desc ? " ("+esc(l.desc)+")" : ""} · ${inr(l.area)} sq ft × Rs. ${inr(l.rate,0)}</span><span class="spacer"></span><span>Rs. ${inr(l.amt,0)}</span></div>`).join("") + (r.glass.divAmt ? `<div class="row bx-out"><span class="note">Divider strips ${inr(r.glass.divLen)} rft × Rs. ${inr(r.glass.divRate,0)}</span><span class="spacer"></span><span>Rs. ${inr(r.glass.divAmt,0)}</span></div>` : "") + `<div class="row bx-out"><span>Price per set (profile + glass)</span><span class="spacer"></span><b>Rs. ${inr(r.rate,0)}</b></div>` + (r.glass.n>1 ? `<div class="row bx-out"><span class="note">× ${r.glass.n} sets</span><span class="spacer"></span><b>Rs. ${inr(r.rate*r.glass.n,0)}</b></div>` : "") : ""}
   ${r.special ? `<div class="bx-warn">This height needs an extra-long side profile. The price is an estimate; confirm it before sending.</div>` : ""}`;
 }
@@ -330,10 +338,12 @@ function productForm(){ const f = state.pForm;
   </div><datalist id="units2"><option>Nos</option><option>Sq.ft</option><option>Sq.m</option><option>Rft</option><option>Set</option><option>Kg</option></datalist>
   <div class="row" style="margin-top:10px"><button class="btn primary" id="pSave" ${db?"":"disabled"}>Add product</button></div></section>`;
 }
-function bxPanelProducts(){ const P = state.prices;
+function bxPanelProducts(){ const P = state.priceDocs.imported;
   const n = P ? (P.systems||[]).reduce((a,s)=>a+s.cells.length,0) : 0;
-  return `<section class="panel"><div class="row"><h2 style="margin:0">Slim profile price list</h2><span class="spacer"></span>${canEditPrices ? `<button class="btn" id="bxRefresh">Refresh from Google Sheet</button>` : ""}</div>
-  <p class="note" style="margin:6px 0 0">${P ? `${n} prices for ${(P.systems||[]).length} systems at heights ${(P.heights||[]).join(", ")} ft, plus locks, handles and dividers. Last updated ${fmtDate(String(P.updatedAt||"").slice(0,10))}. On a quote, use <b>Add slim profile system</b> to price a size. Glass types and colours are on the Glass &amp; colours tab.` : "Not loaded yet. The owner fills it from the Google Sheet with Refresh."}</p>
+  const others = RANGES.slice(1).map(R => { const D = state.priceDocs[R.id]; return `<div class="note"><b>${R.label}:</b> ${D ? `${(D.systems||[]).length} systems, ${(D.systems||[]).reduce((a,s)=>a+s.cells.length,0)} prices, heights up to ${Math.max(...(D.heights||[0]))} ft. ${esc(D.note||"")}` : "prices coming soon."}</div>`; }).join("");
+  return `<section class="panel"><div class="row"><h2 style="margin:0">Slim profile price lists</h2><span class="spacer"></span>${canEditPrices ? `<button class="btn" id="bxRefresh">Refresh from Google Sheet</button>` : ""}</div>
+  <p class="note" style="margin:6px 0 0"><b>Imported:</b> ${P ? `${n} prices for ${(P.systems||[]).length} systems at heights ${(P.heights||[]).join(", ")} ft, plus locks, handles and dividers. Last updated ${fmtDate(String(P.updatedAt||"").slice(0,10))}. On a quote, use <b>Add slim profile system</b> to price a size. Glass types and colours are on the Glass &amp; colours tab.` : "Not loaded yet. The owner fills it from the Google Sheet with Refresh."}</p>
+  <div style="margin-top:8px;display:grid;gap:4px">${others}</div>
   ${state.bxMsg ? `<div class="banner" style="margin-top:8px">${esc(state.bxMsg)}</div>` : ""}</section>`;
 }
 async function refreshPrices(){
@@ -348,7 +358,7 @@ async function refreshPrices(){
     const accRows = acc.filter(r => r && r[0] && /\|/.test(r[2]||"")).map(r => { const size = num(String(r[2]).split("|")[1]); return {system:r[0], option:r[1], size, mrp:parseRs(r[3]), desc:(desc[r[0]]||r[0]) + (r[0]==="HANDLE" ? " "+size+" mm" : "")}; });
     const rft = acc.filter(r => r && ["DIVIDER","GEORGIAN BAR","BEND DIVIDER"].includes(r[0])).map(r => ({system:r[0], rate:parseRs(r[1]), desc:desc[r[0]]||r[0]}));
     const heights = [...new Set(systems.flatMap(s=>s.cells.map(c=>c.h)))].sort((a,b)=>a-b);
-    const doc = {updatedAt:new Date().toISOString(), source:"Google Sheet: AGW Blandox Price List & Quote Register", defaultHeightFt: Math.round(parseRs(h[0] && h[0][0])/304.8*100)/100 || 10, heights, finish:(state.prices && state.prices.finish) || "Brush Gold", systems, acc:accRows, rft};
+    const doc = {updatedAt:new Date().toISOString(), source:"Google Sheet: AGW Blandox Price List & Quote Register", defaultHeightFt: Math.round(parseRs(h[0] && h[0][0])/304.8*100)/100 || 10, heights, finish:(state.priceDocs.imported && state.priceDocs.imported.finish) || "Brush Gold", systems, acc:accRows, rft};
     await db.doc("blandox/prices").set(doc);
     state.bxMsg = `Updated ${systems.reduce((a,s)=>a+s.cells.length,0)} system prices from the Google Sheet.`; render();
   }catch(e){
@@ -574,6 +584,7 @@ function itemHtml(it, i, r){
   return `<div class="item" data-i="${i}">
     <div class="n">${i+1}</div>
     <div class="fields">
+      ${it.slim && it.slim.range ? `<div class="note" style="grid-column:1/-1">Slim profile range: <b>${esc(rangeLabel(it.slim.range))}</b> (for your reference, not printed)</div>` : ""}
       <label class="f nm">Item<input id="it-name-${i}" data-k="name" list="productList" value="${esc(it.name)}" placeholder="Type to pick a product, or write your own"></label>
       <label class="f">HSN<input id="it-hsn-${i}" data-k="hsn" value="${esc(it.hsn)}" inputmode="numeric"></label>
       <label class="f">Qty<input id="it-qty-${i}" data-k="qty" type="text" inputmode="decimal" autocomplete="off" value="${esc(it.qty)}"></label>
@@ -624,8 +635,8 @@ function viewEdit(){
     <label class="row note" for="q-gston">GST on this quote <select id="q-gston" data-q="gstOn" style="width:auto"><option value="yes" ${q.gstOn!==false?"selected":""}>Yes</option><option value="no" ${q.gstOn===false?"selected":""}>No</option></select></label>
     ${q.gstOn===false ? "" : `<label class="row note" for="q-tax">GST type <select id="q-tax" data-q="taxMode" style="width:auto"><option value="intra" ${q.taxMode==="intra"?"selected":""}>CGST + SGST (within ${esc(state.firm.state||"state")})</option><option value="inter" ${q.taxMode==="inter"?"selected":""}>IGST (other state)</option></select></label>`}</div>
     <div class="items">${q.items.map((it,i)=>itemHtml(it,i,c.rows[i])).join("")}</div>
-    <div class="row" style="margin-top:10px"><button class="btn" id="addItem">Add item</button><button class="btn primary" id="addBx" ${state.prices && !state.bx ? "" : "disabled"}>Add slim profile system</button>${state.prices ? "" : `<span class="note">Slim profile prices not loaded yet</span>`}</div>
-    ${state.bx && state.prices ? bxEditor() : ""}
+    <div class="row" style="margin-top:10px"><button class="btn" id="addItem">Add item</button><button class="btn primary" id="addBx" ${anyPrices() && !state.bx ? "" : "disabled"}>Add slim profile system</button>${anyPrices() ? "" : `<span class="note">Slim profile prices not loaded yet</span>`}</div>
+    ${state.bx ? bxEditor() : ""}
   </section>
 
   <section class="panel"><div class="grid two">
@@ -817,10 +828,11 @@ function bind(){
   document.querySelectorAll("[data-rm]").forEach(b => b.addEventListener("click", () => { q.items.splice(+b.dataset.rm,1); if(!q.items.length) q.items.push(blankItem()); state.dirty=true; render(); }));
   document.querySelectorAll("[data-up]").forEach(b => b.addEventListener("click", () => { const i=+b.dataset.up; [q.items[i-1],q.items[i]]=[q.items[i],q.items[i-1]]; state.dirty=true; render(); }));
   on("addItem","click", () => { q.items.push(blankItem()); state.dirty=true; render(); const n=$(`#it-name-${q.items.length-1}`); n && n.focus(); });
-  on("addBx","click", () => { const dc = state.colours.find(c=>/brush gold/i.test(c.name)) || state.colours[0]; state.bx = {sys:"", w:"", wu:"INCH", h:"", hu:"INCH", qty:1, colour: dc ? dc.name : "", parts:[], div:true}; render(); const s=$("#bx-sys"); s && s.focus(); });
+  on("addBx","click", () => { const dc = state.colours.find(c=>/brush gold/i.test(c.name)) || state.colours[0]; state.bx = {range:(RANGES.find(R => state.priceDocs[R.id]) || RANGES[0]).id, sys:"", w:"", wu:"INCH", h:"", hu:"INCH", qty:1, colour: dc ? dc.name : "", parts:[], div:true}; render(); const s=$("#bx-sys"); s && s.focus(); });
   on("bxClose","click", () => { state.bx = null; render(); });
   document.querySelectorAll("[data-bx]").forEach(el => el.addEventListener(el.tagName==="SELECT"?"change":"input", () => {
     const k = el.dataset.bx; state.bx[k] = el.value;
+    if(k==="range" && state.prices && !bxSystems().includes(state.bx.sys)) state.bx.sys = "";
     if(k==="sys") state.bx.wu = el.value==="HANDLE" ? "MM" : "INCH";
     if(el.tagName==="SELECT"){ rerenderKeep(el.id); return; }
     const r = bxQuote(state.bx), out = $("#bxOut"), add = $("#bxAdd");
@@ -880,7 +892,7 @@ function drawSystem(doc, it, x, y, w, h){
     const P = state.prices || {};
     const hBlank = String(s.height ?? "").trim()==="";
     const wft = toMm(s.width, s.widthUnit||"FT")/304.8 || 8;
-    const hft = hBlank ? (num(P.defaultHeightFt)||10) : (toMm(s.height, s.heightUnit||"FT")/304.8 || 8);
+    const hft = hBlank ? (num(s.defH)||num(P.defaultHeightFt)||10) : (toMm(s.height, s.heightUnit||"FT")/304.8 || 8);
     const layouts = {"SYNCHRO":["F","S<","S>","F"], "2+1":["F","S<","S<"], "3+1":["F","S<","S<","S<"], "ONE FIX AND SLIDE":["F","S<"], "SINGLE SLIDE":["S<"], "SWING DOOR":["W"], "FIX PARTITION WITHOUT TRACK":["F"], "FIX PARTITION WITH TRACK":["F"]};
     const panels = layouts[sys] || ["F"];
     const hasTrack = sys==="FIX PARTITION WITH TRACK" || panels.some(p => p[0]==="S");
@@ -977,7 +989,7 @@ function glassTint(n){ n = String(n||"");
 function slimDims(it){ const s = it.slim||it.blandox||{}, P = state.prices||{};
   const hBlank = String(s.height??"").trim()==="";
   const wmm = Math.round(toMm(s.width, s.widthUnit||"FT")) || 2438;
-  const hmm = hBlank ? Math.round((num(P.defaultHeightFt)||10)*304.8) : (Math.round(toMm(s.height, s.heightUnit||"FT")) || 2438);
+  const hmm = hBlank ? Math.round((num(s.defH)||num(P.defaultHeightFt)||10)*304.8) : (Math.round(toMm(s.height, s.heightUnit||"FT")) || 2438);
   const u = x => String(x||"FT").toLowerCase();
   const entered = `${s.width} ${u(s.widthUnit)} W x ${hBlank ? ft1(hmm/304.8)+" ft" : s.height+" "+u(s.heightUnit)} H`;
   return {s, wmm, hmm, entered, mmTxt:`${nIN(wmm)} W x ${nIN(hmm)} H mm`}; }
@@ -1335,7 +1347,7 @@ function startData(){
   db.doc("settings/firm").onSnapshot(s => { if(s.exists){ state.firm = {...DEFAULT_FIRM, ...s.data()}; if(state.view!=="edit" && state.view!=="firm") render(); } }, () => {});
   db.collection("glass").orderBy("name").onSnapshot(s => { state.glass = s.docs.map(d => ({id:d.id, ...d.data()})); if(state.view==="options") render(); }, () => {});
   db.collection("colours").orderBy("name").onSnapshot(s => { state.colours = s.docs.map(d => ({id:d.id, ...d.data()})); if(state.view==="options") render(); }, () => {});
-  db.doc("blandox/prices").onSnapshot(s => { const had = !!state.prices; state.prices = s.exists ? s.data() : null; if(state.view==="products" || (state.view==="edit" && !had && !state.bx)) render(); }, () => {});
+  RANGES.forEach(R => db.doc(R.doc).onSnapshot(s => { const had = !!state.priceDocs[R.id]; state.priceDocs[R.id] = s.exists ? s.data() : null; if(state.view==="products" || (state.view==="edit" && !had && !state.bx)) render(); }, () => {}));
   const prodRender = () => { mergeProducts(); if(state.view==="products" && !/Importing/.test(state.importMsg)) render(); };
   db.collection("products").orderBy("name").onSnapshot(s => { prodColl = s.docs.map(d => ({id:d.id, ...d.data()})); prodRender(); }, () => {});
   db.doc("catalog/odoo").onSnapshot(s => { catDoc = s.exists ? s.data() : null; prodRender(); }, () => {});
