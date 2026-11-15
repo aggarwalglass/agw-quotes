@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Get AGW Quotes</title>
+<meta name="theme-color" content="#2f3a44">
+<link rel="icon" href="../icons/icon-192.png">
+<style>
+:root{--bg:#f6f4ef;--card:#fff;--ink:#23272b;--mute:#6b6f73;--gold:#9b7a4c;--slate:#2f3a44;--line:#e4dfd4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+header{background:var(--slate);color:#fff;text-align:center;padding:36px 16px 28px}
+header img{width:84px;height:84px;border-radius:20px}
+h1{margin:12px 0 4px;font-size:24px}
+header p{margin:0;color:#d9cbb2;font-size:14px}
+main{max-width:520px;margin:-14px auto 40px;padding:0 16px;display:flex;flex-direction:column;gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+.card h2{margin:0 0 8px;font-size:18px}
+.btn{display:block;text-align:center;background:var(--gold);color:#fff;text-decoration:none;font-weight:700;padding:14px;border-radius:10px;margin-top:10px}
+.btn.alt{background:var(--slate)}
+ol{margin:6px 0 0;padding-left:20px}li{margin:6px 0}
+.note{color:var(--mute);font-size:14px}
+.hl{outline:3px solid var(--gold)}
+.share{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:0 6px;font-size:13px}
+</style></head><body>
+<header><img src="../icons/icon-192.png" alt=""><h1>AGW Quotes</h1><p>Aggarwal Glass Works · team quotation app</p></header>
+<main>
+  <section class="card" id="android">
+    <h2>Android phone</h2>
+    <a class="btn" href="https://github.com/aggarwalglass/agw-quotes/releases/latest/download/AGW-Quotes.apk">Download app</a>
+    <ol class="note">
+      <li>Open the downloaded file and tap <b>Install</b>. If asked, allow installing from this source once.</li>
+      <li>Open <b>AGW Quotes</b> and log in with your mobile number and PIN.</li>
+      <li>First time on a new phone, wait for the owner to approve it. It opens by itself after approval.</li>
+    </ol>
+  </section>
+  <section class="card" id="iphone">
+    <h2>iPhone</h2>
+    <ol class="note">
+      <li>Open this page in <b>Safari</b>.</li>
+      <li>Tap the <b>Share</b> button <span class="share">⬆</span>, then <b>Add to Home Screen</b>, then <b>Add</b>.</li>
+      <li>Open <b>AGW Quotes</b> from your home screen and log in with your mobile number and PIN.</li>
+    </ol>
+    <a class="btn alt" href="../">Open app</a>
+  </section>
+  <section class="card" id="pc">
+    <h2>Laptop or computer</h2>
+    <p class="note" style="margin:0">Open in Chrome, log in, and wait for approval the first time.</p>
+    <a class="btn alt" href="../">Open app</a>
+  </section>
+  <p class="note" style="text-align:center">Don't clear app or browser data, or you'll need approval again.</p>
+</main>
+<script>
+(function(){ var u = navigator.userAgent, main = document.querySelector("main");
+  var first = /Android/i.test(u) ? "android" : /iPhone|iPad|iPod/i.test(u) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ? "iphone" : "pc";
+  var el = document.getElementById(first); el.classList.add("hl"); main.insertBefore(el, main.firstChild); })();
+</script>
+</body></html>
