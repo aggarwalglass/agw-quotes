@@ -27,6 +27,7 @@ jobs:
           npx cap sync android
         env: { APP_URL: "${{ vars.APP_URL }}" }
       - name: Icon, screenshot blocking, signing
+        env: { KS_PASS: "${{ secrets.KEYSTORE_PASS || 'agw-build-key' }}" }
         run: |
           for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             cp web/icons/icon-192.png android/app/src/main/res/mipmap-$d/ic_launcher.png
@@ -36,7 +37,8 @@ jobs:
           rm -rf android/app/src/main/res/mipmap-anydpi-v26
           MA=$(find android/app/src/main/java -name MainActivity.java)
           cp android-extra/MainActivity.java "$MA"
-          echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > android/app/agw.keystore
+          if [ -n "${{ secrets.KEYSTORE_B64 }}" ]; then echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > android/app/agw.keystore;
+          else keytool -genkeypair -keystore android/app/agw.keystore -alias agw -keyalg RSA -keysize 2048 -validity 10000 -storepass "$KS_PASS" -keypass "$KS_PASS" -dname "CN=Aggarwal Glass Works, O=AGW, L=Bathinda, C=IN"; fi
           cat >> android/app/build.gradle <<'GRADLE'
           android {
             signingConfigs { agw { storeFile file('agw.keystore'); storePassword System.getenv('KS_PASS'); keyAlias 'agw'; keyPassword System.getenv('KS_PASS') } }
@@ -46,7 +48,7 @@ jobs:
       - name: Build
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon
-        env: { KS_PASS: "${{ secrets.KEYSTORE_PASS }}" }
+        env: { KS_PASS: "${{ secrets.KEYSTORE_PASS || 'agw-build-key' }}" }
       - run: cp android/app/build/outputs/apk/release/app-release.apk AGW-Quotes.apk
       - uses: actions/upload-artifact@v4
         with: { name: AGW-Quotes-apk, path: AGW-Quotes.apk }
