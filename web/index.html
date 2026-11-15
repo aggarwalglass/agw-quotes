@@ -750,7 +750,7 @@ function viewFirm(){
     <label class="f">Tagline (cover page)<input id="f-tagline" data-f="tagline" value="${esc(f.tagline||"")}" placeholder="Architectural glass &amp; slim profile systems"></label>
     <label class="f">GSTIN<input id="f-gstin" data-f="gstin" value="${esc(f.gstin)}" placeholder="Add your GSTIN"></label>
     <label class="f" style="grid-column:1/-1">Address<textarea id="f-address" data-f="address" rows="2">${esc(f.address)}</textarea></label>
-    <label class="f">Email<input id="f-email" data-f="email" value="${esc(f.email)}"></label>
+    <label class="f">Email (not printed)<input id="f-email" data-f="email" value="${esc(f.email)}"></label>
     <label class="f">Office phone (not printed; quotes show the salesperson's number)<input id="f-phone" data-f="phone" value="${esc(f.phone)}"></label>
     <label class="f">Home state (for CGST/SGST)<input id="f-state" data-f="state" value="${esc(f.state)}"></label>
     <label class="f">Quote number prefix<input id="f-prefix" data-f="prefix" value="${esc(f.prefix)}"></label>
@@ -1029,7 +1029,7 @@ function pxCover(doc, q, f, slimCount){
   doc.setFontSize(9.5); doc.setTextColor(...PX.ink); doc.text(`Quotation ${q.number}`, cx, 256, {align:"center"});
   doc.setFillColor(...PX.gold); doc.rect(30, 265, W-60, 1.5, "F");
   doc.setFontSize(7); doc.setTextColor(...PX.mute); doc.text(slimCount ? "DRAWINGS  /  SPECIFICATIONS  /  QUOTATION" : "SPECIFICATIONS  /  QUOTATION", cx, 274, {align:"center"});
-  const contact = q.sp && (q.sp.name || q.sp.phone) ? `Your contact: ${[q.sp.name, q.sp.phone].filter(Boolean).join("  ·  ")}` : (f.email || ""); if(contact){ doc.setFontSize(7.5); doc.text(contact, cx, 280, {align:"center"}); }
+  const contact = q.sp && (q.sp.name || q.sp.phone) ? `Your contact: ${[q.sp.name, q.sp.phone].filter(Boolean).join("  ·  ")}` : ""; if(contact){ doc.setFontSize(7.5); doc.text(contact, cx, 280, {align:"center"}); }
 }
 
 function pxHeader(doc, q, f, right){
@@ -1167,7 +1167,7 @@ function pxQuote(doc, q, f, c){
   doc.setFontSize(20); doc.text("QUOTATION", W-M, 24, {align:"right"});
   doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(...PX.mute); doc.text(q.number, W-M, 30, {align:"right"});
   const clientTxt = [cl.name, cl.company, cl.address, [cl.phone, cl.email].filter(Boolean).join("  |  "), [cl.gstin ? "GSTIN: "+cl.gstin : "", cl.state ? "State: "+cl.state : ""].filter(Boolean).join("   ")].filter(Boolean).join("\n");
-  const fromTxt = [`From: ${f.name}${f.address ? ", "+String(f.address).replace(/\n/g,", ") : ""}`, [f.gstin ? "GSTIN: "+f.gstin : "", f.email].filter(Boolean).join("  |  "), q.sp && (q.sp.name || q.sp.phone) ? `Your contact: ${[q.sp.name, q.sp.phone].filter(Boolean).join(", ")}` : ""].filter(Boolean).join("\n");
+  const fromTxt = [`From: ${f.name}${f.address ? ", "+String(f.address).replace(/\n/g,", ") : ""}`, [f.gstin ? "GSTIN: "+f.gstin : ""].filter(Boolean).join("  |  "), q.sp && (q.sp.name || q.sp.phone) ? `Your contact: ${[q.sp.name, q.sp.phone].filter(Boolean).join(", ")}` : ""].filter(Boolean).join("\n");
   doc.autoTable({ startY:37, theme:"plain", margin:{left:M,right:M},
     head:[["Prepared for","Quotation date","Valid until"]],
     body:[[clientTxt, midDate(q.date), midDate(q.validTill)], [fromTxt, "", gOn ? `GST: ${intra ? "CGST + SGST" : "IGST"} as shown` : "Prices without GST"]],
@@ -1268,7 +1268,7 @@ async function makePdf(){
   doc.setFillColor(...grey); doc.rect(0,0,W,30,"F");
   doc.setTextColor(255); doc.setFont("helvetica","bold"); doc.setFontSize(17); doc.text(f.name||"", M, 13);
   doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
-  doc.text([f.address, [f.gstin?`GSTIN: ${f.gstin}`:"", f.email, q.sp && q.sp.phone ? `${q.sp.name ? q.sp.name+": " : ""}${q.sp.phone}` : ""].filter(Boolean).join("   |   ")].filter(Boolean), M, 19);
+  doc.text([f.address, [f.gstin?`GSTIN: ${f.gstin}`:"", q.sp && q.sp.phone ? `${q.sp.name ? q.sp.name+": " : ""}${q.sp.phone}` : ""].filter(Boolean).join("   |   ")].filter(Boolean), M, 19);
   doc.setFont("helvetica","bold"); doc.setFontSize(15); doc.text("QUOTATION", W-M, 13, {align:"right"});
   doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
   doc.text([`No: ${q.number}`, `Date: ${fmtDate(q.date)}`, `Valid till: ${fmtDate(q.validTill)}`], W-M, 19, {align:"right"});
