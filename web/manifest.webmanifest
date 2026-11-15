@@ -1,7 +1,7 @@
 {
   "name": "AGW Quote Maker",
   "short_name": "AGW Quotes",
-  "description": "Aggarwal Glass Works quotations",
+  "description": "Aggarwal Glass quotations",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

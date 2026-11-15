@@ -114,7 +114,7 @@ label.f > *{text-transform:none;letter-spacing:0;font-weight:400;font-size:15px}
 </style>
 
 <header class="bar"><div class="wrap">
-  <div class="brand">AGW Quote Maker <small>Aggarwal Glass Works</small></div>
+  <div class="brand">AGW Quote Maker <small>Aggarwal Glass</small></div>
   <nav>
     <button id="nav-quotes" data-view="quotes">Quotes</button>
     <button id="nav-products" data-view="products">Products</button>
@@ -140,7 +140,7 @@ const fmtDate = d => { if(!d) return ""; const [y,m,dd] = d.split("-"); return `
 const slug = s => (s||"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,60) || "client";
 
 const DEFAULT_FIRM = {
-  name:"Aggarwal Glass Works", address:"G.T. Road, Bathinda, Punjab", gstin:"", state:"Punjab",
+  name:"Aggarwal Glass", address:"Near Sukhraj Cinema, Goniana Road, Bathinda, Punjab", gstin:"", state:"Punjab",
   email:"tostem@agwgroup.in", phone:"", prefix:"AGW/Q/", validityDays:15,
   bank:"", terms:"Payment: 100% advance (30% with order, 30% before dispatch, 40% before installation).\nCancellation forfeits the advance.\nPrices valid for 15 days from the quotation date.\nGST extra as shown."
 };
@@ -1009,7 +1009,7 @@ function pxCover(doc, q, f, slimCount){
   doc.setFillColor(...PX.cream); doc.rect(0,0,W,H,"F");
   doc.setDrawColor(...PX.gold); doc.setLineWidth(0.5); doc.rect(9,9,W-18,H-18); doc.setLineWidth(0.2); doc.rect(11.2,11.2,W-22.4,H-22.4);
   doc.setLineWidth(1.4); doc.circle(cx, 44, 10.5, "S");
-  doc.setFont("times","bold"); doc.setTextColor(...PX.ink); doc.setFontSize(14); doc.text(initials(f.name), cx, 46.2, {align:"center"});
+  doc.setFont("times","bold"); doc.setTextColor(...PX.ink); doc.setFontSize(14); doc.text(f.monogram || "AGW", cx, 46.2, {align:"center"});
   doc.setFont("helvetica","bold"); doc.setFontSize(17); doc.setTextColor(...PX.ink); spaced(doc, String(f.name||"").toUpperCase(), cx, 70, 1.1);
   doc.setFont("helvetica","normal"); doc.setFontSize(8.5); doc.setTextColor(...PX.gold); doc.text(String(f.address||"").split(/\n/)[0], cx, 77, {align:"center"});
   doc.setFontSize(6.8); doc.setTextColor(...PX.ink); spaced(doc, tagOf(f).toUpperCase(), cx, 84, 0.9);
