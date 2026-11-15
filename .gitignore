@@ -1,0 +1,6 @@
+node_modules/
+android/
+capacitor.config.json
+*.keystore
+migrate/
+test/
