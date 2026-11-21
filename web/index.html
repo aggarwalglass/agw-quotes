@@ -255,7 +255,38 @@ function bxQuote(m){
     out.glass = {lines, glassAmt, divLen, divRate: divRow ? num(divRow.rate) : 0, divAmt, n};
     out.rate = out.profileRate + glassAmt + divAmt;
   }
+  if(isSys){ const A = bxAddons(m); if(A.lines.length){ if(out.profileRate == null) out.profileRate = out.rate; out.addons = A; out.rate += A.amt; } }
   return out;
+}
+
+/* ---------- add-ons priced into one slim profile set (lock, handle, divider, Georgian bar ...) ---------- */
+const qtyTxt = q => String(Math.round(num(q)*100)/100);
+const cleanLabel = d => slim(d).replace(/\s*\(per running foot\)/i, "").trim();
+function bxAddonGroups(){ const P = state.prices || {}, g = [];
+  (P.acc || []).forEach(a => { let x = g.find(y => y.key === a.system); if(!x){ x = {key:a.system, kind:"acc", opts:[]}; g.push(x); } x.opts.push(a); });
+  (P.rft || []).forEach(r => g.push({key:"RFT:" + r.system, kind:"rft", row:r}));
+  return g; }
+function bxAddons(m){
+  const add = m.add || {}, lines = [];
+  for(const G of bxAddonGroups()){
+    const v = add[G.key] || {};
+    if(G.kind === "acc"){ const q = num(v.q); if(!q) continue;
+      const row = G.opts.find(o => o.option === v.opt) || G.opts[0];
+      lines.push({key:G.key, label:cleanLabel(row.desc || row.option), qty:q, unit:"Nos", rate:num(row.mrp), amt:Math.round(q*num(row.mrp))}); }
+    else { const ft = Math.round(num(v.ft)*100)/100; if(!ft) continue;
+      lines.push({key:G.key, label:cleanLabel(G.row.desc || G.row.system), qty:ft, unit:"rft", rate:num(G.row.rate), amt:Math.round(ft*num(G.row.rate))}); }
+  }
+  return {lines, amt: lines.reduce((a,l) => a + l.amt, 0)};
+}
+function bxAddonsHtml(m){ const groups = bxAddonGroups(); if(!groups.length) return "";
+  const add = m.add || {}, wft = toMm(m.w, m.wu)/304.8, sug = wft ? ft1(wft) : "";
+  const cell = G => { const v = add[G.key] || {}, id = "bxa-" + G.key.replace(/[^A-Za-z0-9]+/g, "-");
+    if(G.kind === "acc"){ const first = G.opts[0], name = G.opts.length > 1 ? cleanLabel(first.desc).replace(/\s*\d+\s*mm$/i, "") : cleanLabel(first.desc || first.option);
+      return `<label class="f">${esc(name)} (qty)<input id="${id}-q" data-bxa="${esc(G.key)}|q" type="text" inputmode="numeric" autocomplete="off" value="${esc(v.q || "")}" placeholder="0"></label>` +
+        (G.opts.length > 1 ? `<label class="f">${esc(name)} size<select id="${id}-o" data-bxa="${esc(G.key)}|opt">${G.opts.map(o => `<option value="${esc(o.option)}" ${v.opt === o.option ? "selected" : ""}>${esc(o.option)} · Rs. ${inr(num(o.mrp),0)}</option>`).join("")}</select></label>` : ""); }
+    return `<label class="f">${esc(cleanLabel(G.row.desc || G.row.system))} (running ft)<input id="${id}-f" data-bxa="${esc(G.key)}|ft" type="text" inputmode="decimal" autocomplete="off" value="${esc(v.ft || "")}" placeholder="${sug ? "e.g. " + sug : "0"}"></label>`; };
+  return `<div class="bxg"><div class="row"><b>Add-ons</b><span class="note">Added into this set's price, like the Vixor sheet. Leave blank if not needed.</span></div>
+  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">${groups.map(cell).join("")}</div></div>`;
 }
 function bxRefreshOut(){ const r = bxQuote(state.bx), out = $("#bxOut"), add = $("#bxAdd"); if(out) out.innerHTML = bxOutHtml(state.bx, r); if(add) add.disabled = !!r.err; }
 function bxGlassHtml(m){ const parts = m.parts||[], hu = (m.hu||"FT").toLowerCase();
@@ -271,9 +302,10 @@ function bxGlassHtml(m){ const parts = m.parts||[], hu = (m.hu||"FT").toLowerCas
 function bxItems(m){ const r = bxQuote(m); if(r.err) return null;
   const G = r.glass;
   const glassTxt = G ? `Glass in ${G.lines.length} part${G.lines.length>1?"s":""}: ` + G.lines.map(l => `${l.glass}${l.desc ? ` (${l.desc})` : ""}`).join("; ") + "." + (G.divAmt ? " Divider strip between parts." : "") : "";
-  const desc = [r.unit==="Set" ? `Size: ${r.text}.` : r.unit==="Rft" ? `Length: ${r.text}.` : "", `Colour: ${r.colour}.`, r.unit==="Set" ? (G ? glassTxt : "Glass not included.") : ""].filter(Boolean).join(" ");
+  const A = r.addons, addTxt = A ? "Includes: " + A.lines.map(l => l.unit === "rft" ? `${l.label} ${qtyTxt(l.qty)} rft` : `${l.qty > 1 ? l.qty + " × " : ""}${l.label}`).join(", ") + "." : "";
+  const desc = [r.unit==="Set" ? `Size: ${r.text}.` : r.unit==="Rft" ? `Length: ${r.text}.` : "", `Colour: ${r.colour}.`, r.unit==="Set" ? (G ? glassTxt : "Glass not included.") : "", addTxt].filter(Boolean).join(" ");
   const brand = rangeBrand(m.range);
-  return [{name: brand + " " + (G ? r.name + " with glass" : r.name), desc, hsn:"", qty:r.qty, unit:r.unit, rate:r.rate, disc:0, gst:18, slim:{system:m.sys, width:m.w, widthUnit:m.wu, height:m.h, heightUnit:m.hu, colour:r.colour, priced:r.priced, special:!!r.special, room: String(m.room||"").trim(), range: m.range || "imported", defH: num((state.prices||{}).defaultHeightFt) || 10, profileRate: G ? r.profileRate : r.rate, glass: G ? G.lines : [], dividerRft: G ? G.divLen : 0, dividerAmt: G ? G.divAmt : 0}}];
+  return [{name: brand + " " + (G ? r.name + " with glass" : r.name), desc, hsn:"", qty:r.qty, unit:r.unit, rate:r.rate, disc:0, gst:18, slim:{system:m.sys, width:m.w, widthUnit:m.wu, height:m.h, heightUnit:m.hu, colour:r.colour, priced:r.priced, special:!!r.special, room: String(m.room||"").trim(), range: m.range || "imported", defH: num((state.prices||{}).defaultHeightFt) || 10, profileRate: r.profileRate ?? r.rate, addons: A ? A.lines : [], glass: G ? G.lines : [], dividerRft: G ? G.divLen : 0, dividerAmt: G ? G.divAmt : 0}}];
 }
 function bxEditor(){ const m = state.bx;
   const rangeSel = `<label class="f" style="grid-column:1/-1">Range<select id="bx-range" data-bx="range">${RANGES.map(R => `<option value="${R.id}" ${(m.range||"imported")===R.id ? "selected" : ""} ${state.priceDocs[R.id] ? "" : "disabled"}>${R.label}${state.priceDocs[R.id] ? "" : " (prices coming soon)"}</option>`).join("")}</select></label>`;
@@ -296,14 +328,16 @@ function bxEditor(){ const m = state.bx;
    ${colourSel}
    ${isSys ? `<label class="f">Room / area<input id="bx-room" data-bx="room" autocomplete="off" value="${esc(m.room||"")}" placeholder="e.g. Lobby, Room 1"></label>` : ""}
   </div>
-  ${isSys ? bxGlassHtml(m) : ""}
+  ${isSys ? bxGlassHtml(m) + bxAddonsHtml(m) : ""}
   <div id="bxOut">${bxOutHtml(m, r)}</div>
   <div class="row"><span class="note">MRP before discount and GST. Set the discount on the item after adding.</span><span class="spacer"></span><button class="btn primary" id="bxAdd" ${r.err?"disabled":""}>Add to quote</button></div></div>`;
 }
 function bxOutHtml(m, r){
   if(r.err) return `<div class="row bx-out"><span class="${m.sys?"bx-err":"note"}">${esc(r.err)}</span></div>`;
   return `<div class="row bx-out"><span style="min-width:0">${esc(r.name)}<br><span class="note">${esc(rangeLabel(m.range))} · ${esc(r.text)}${r.unit==="Set" ? " · priced as "+esc(r.priced) : ""} · ${esc(r.colour)}${r.adj ? ` (${r.adj>0?"+":""}${r.adj}%)` : ""}</span></span><span class="spacer"></span><b>Rs. ${inr(r.profileRate ?? r.rate,0)}${r.unit==="Rft" ? " / rft" : ""}</b></div>
-  ${r.glass ? r.glass.lines.map((l,i)=>`<div class="row bx-out"><span class="note" style="min-width:0">Part ${i+1}: ${esc(l.glass)}${l.desc ? " ("+esc(l.desc)+")" : ""} · ${inr(l.area)} sq ft × Rs. ${inr(l.rate,0)}</span><span class="spacer"></span><span>Rs. ${inr(l.amt,0)}</span></div>`).join("") + (r.glass.divAmt ? `<div class="row bx-out"><span class="note">Divider strips ${inr(r.glass.divLen)} rft × Rs. ${inr(r.glass.divRate,0)}</span><span class="spacer"></span><span>Rs. ${inr(r.glass.divAmt,0)}</span></div>` : "") + `<div class="row bx-out"><span>Price per set (profile + glass)</span><span class="spacer"></span><b>Rs. ${inr(r.rate,0)}</b></div>` + (r.glass.n>1 ? `<div class="row bx-out"><span class="note">× ${r.glass.n} sets</span><span class="spacer"></span><b>Rs. ${inr(r.rate*r.glass.n,0)}</b></div>` : "") : ""}
+  ${r.glass ? r.glass.lines.map((l,i)=>`<div class="row bx-out"><span class="note" style="min-width:0">Part ${i+1}: ${esc(l.glass)}${l.desc ? " ("+esc(l.desc)+")" : ""} · ${inr(l.area)} sq ft × Rs. ${inr(l.rate,0)}</span><span class="spacer"></span><span>Rs. ${inr(l.amt,0)}</span></div>`).join("") + (r.glass.divAmt ? `<div class="row bx-out"><span class="note">Divider strips ${inr(r.glass.divLen)} rft × Rs. ${inr(r.glass.divRate,0)}</span><span class="spacer"></span><span>Rs. ${inr(r.glass.divAmt,0)}</span></div>` : "") : ""}
+  ${r.addons ? r.addons.lines.map(l => `<div class="row bx-out"><span class="note" style="min-width:0">${esc(l.label)} · ${qtyTxt(l.qty)} ${l.unit} × Rs. ${inr(l.rate,0)}</span><span class="spacer"></span><span>Rs. ${inr(l.amt,0)}</span></div>`).join("") : ""}
+  ${r.glass || r.addons ? `<div class="row bx-out"><span>Price per set (${["profile", r.glass ? "glass" : "", r.addons ? "add-ons" : ""].filter(Boolean).join(" + ")})</span><span class="spacer"></span><b>Rs. ${inr(r.rate,0)}</b></div>` + (num(m.qty)>1 ? `<div class="row bx-out"><span class="note">× ${num(m.qty)} sets</span><span class="spacer"></span><b>Rs. ${inr(r.rate*num(m.qty),0)}</b></div>` : "") : ""}
   ${gate.isAdmin && state.prices && costDisc(m) && r.unit ? `<div class="row bx-out"><span class="note">Our cost (owner only): profile ${costDisc(m)}% off MRP, GST extra</span><span class="spacer"></span><span class="note">Rs. ${inr(Math.round((r.profileRate ?? r.rate)*(1-costDisc(m)/100)),0)}</span></div>` : ""}
   ${r.special ? `<div class="bx-warn">This height needs an extra-long side profile. The price is an estimate; confirm it before sending.</div>` : ""}`;
 }
@@ -848,6 +882,9 @@ function bind(){
   on("bxAddPart","click", () => { if(!state.bx.parts) state.bx.parts = []; state.bx.parts.push({glass:"", sqft:"", rate:"", desc:""}); render(); const s = $(`#bxp-glass-${state.bx.parts.length-1}`); s && s.focus(); });
   document.querySelectorAll("[data-bxp-rm]").forEach(b => b.addEventListener("click", () => { state.bx.parts.splice(+b.dataset.bxpRm,1); render(); }));
   on("bx-div","change", e => { state.bx.div = e.target.checked; bxRefreshOut(); });
+  document.querySelectorAll("[data-bxa]").forEach(el => el.addEventListener(el.tagName==="SELECT" ? "change" : "input", () => {
+    const [key, f] = el.dataset.bxa.split("|"); if(!state.bx.add) state.bx.add = {}; if(!state.bx.add[key]) state.bx.add[key] = {};
+    state.bx.add[key][f] = el.value; bxRefreshOut(); }));
   document.querySelectorAll("[data-bxp]").forEach(el => el.addEventListener(el.tagName==="SELECT"?"change":"input", () => {
     const [i,k] = el.dataset.bxp.split(":"); state.bx.parts[+i][k] = el.value;
     if(el.tagName==="SELECT"){ rerenderKeep(el.id); return; }
@@ -855,7 +892,7 @@ function bind(){
   on("bxAdd","click", () => { const its = bxItems(state.bx); if(!its) return;
     const only = q.items.length===1 ? q.items[0] : null;
     if(only && !String(only.name||"").trim() && !num(only.rate)) q.items.splice(0,1,...its); else q.items.push(...its);
-    state.dirty = true; state.bx = {...state.bx, w:"", h:"", qty:1, room:""}; render(); toast(its.length>1 ? "Added system and glass" : "Added to quote"); });
+    state.dirty = true; state.bx = {...state.bx, w:"", h:"", qty:1, room:"", add:{}}; render(); toast(its.length>1 ? "Added system and glass" : "Added to quote"); });
   on("back","click", () => setView("quotes"));
   on("save","click", () => saveQuote());
   on("pdf","click", makePdf);
@@ -1067,6 +1104,7 @@ function pxCard(doc, x, no, y0, gOn){
   field("PROFILE", colour);
   const gl = Array.isArray(s.glass) && s.glass.length ? s.glass.map((l,i) => `${s.glass.length>1 ? (i+1)+". " : ""}${l.glass}${l.desc ? " - "+l.desc : ""}`) : ["Glass not included"];
   field("GLASS", gl);
+  if(Array.isArray(s.addons) && s.addons.length) field("ADD-ONS", s.addons.map(l => l.unit === "rft" ? `${l.label} ${qtyTxt(l.qty)} rft` : `${l.qty > 1 ? l.qty + " x " : ""}${l.label}`).join(", "));
   if(s.room) field("ROOM / AREA", s.room);
   const py = y0 + ch - 20;
   doc.setDrawColor(...PX.rule); doc.line(tx, py, tx+tw, py);
