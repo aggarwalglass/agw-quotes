@@ -633,27 +633,43 @@ function render(){
 }
 
 /* ---------- quotes list ---------- */
+function quoteSp(q){ return (q.sp && (q.sp.name || q.sp.phone)) ? {id:q.sp.id || "", name:q.sp.name || q.sp.phone} : (q.createdBy && q.createdBy.name ? {id:q.createdBy.id || "", name:q.createdBy.name} : null); }
+function quoteTime(q){ return String(q.date || "") + "|" + String(q.createdAt || q.updatedAt || ""); }
 function viewQuotes(){
-  const s = state.search.toLowerCase();
-  const list = state.quotes.filter(q => !s || [q.number,q.client?.name,q.client?.company,q.client?.phone].join(" ").toLowerCase().includes(s));
-  const totalOpen = state.quotes.filter(q=>q.status==="Sent").reduce((a,q)=>a+calc(q).grand,0);
-  const won = state.quotes.filter(q=>q.status==="Won").reduce((a,q)=>a+calc(q).grand,0);
+  const s = state.search.toLowerCase(), f = state.qf || (state.qf = {sp:"", sort:"new"});
+  let list = state.quotes.filter(q => !s || [q.number,q.client?.name,q.client?.company,q.client?.phone,quoteSp(q)?.name].join(" ").toLowerCase().includes(s));
+  if(f.sp) list = list.filter(q => { const sp = quoteSp(q); return f.sp === "none" ? !sp : sp && (sp.id === f.sp || sp.name === f.sp); });
+  const tot = new Map(list.map(q => [q, calc(q).grand]));
+  list = list.slice().sort(f.sort === "amtDesc" ? (a,b) => tot.get(b) - tot.get(a) : f.sort === "amtAsc" ? (a,b) => tot.get(a) - tot.get(b)
+    : f.sort === "old" ? (a,b) => quoteTime(a).localeCompare(quoteTime(b)) : (a,b) => quoteTime(b).localeCompare(quoteTime(a)));
+  const totalOpen = list.filter(q=>q.status==="Sent").reduce((a,q)=>a+tot.get(q),0);
+  const won = list.filter(q=>q.status==="Won").reduce((a,q)=>a+tot.get(q),0);
+  const sps = []; const addSp = (id, name) => { if(name && !sps.some(x => (id && x.id === id) || x.name === name)) sps.push({id: id || name, name}); };
+  gate.staff.forEach(x => addSp(x.id, x.name)); state.quotes.forEach(q => { const sp = quoteSp(q); if(sp) addSp(sp.id, sp.name); });
+  sps.sort((a,b) => a.name.localeCompare(b.name));
+  const filtered = f.sp || s;
   return `
   <div class="row"><h1>Quotations</h1><span class="spacer"></span>
     <button class="btn" id="exportCsv" ${state.quotes.length?"":"disabled"}>Export for Odoo (CSV)</button>
     <button class="btn primary" id="newQ">New quote</button></div>
-  <div class="stats"><div><b>${state.quotes.length}</b>quotes</div><div><b>Rs. ${inr(totalOpen,0)}</b>sent, awaiting reply</div><div><b>Rs. ${inr(won,0)}</b>won</div></div>
-  <input class="search" id="search" type="search" placeholder="Search by number, client or phone" value="${esc(state.search)}">
+  <div class="stats"><div><b>${list.length}</b>${filtered ? "quotes shown" : "quotes"}</div><div><b>Rs. ${inr(totalOpen,0)}</b>sent, awaiting reply</div><div><b>Rs. ${inr(won,0)}</b>won</div><div><b>Rs. ${inr(list.reduce((a,q)=>a+tot.get(q),0),0)}</b>total value</div></div>
+  <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:8px">
+    <input class="search" id="search" type="search" placeholder="Search by number, client, phone or salesperson" value="${esc(state.search)}" style="flex:1 1 220px;margin:0">
+    ${gate.isAdmin ? `<label class="row note" for="qf-sp" style="gap:6px">Salesperson<select id="qf-sp" style="width:auto"><option value="">All</option>${sps.map(x => `<option value="${esc(x.id)}" ${f.sp===x.id ? "selected" : ""}>${esc(x.name)}</option>`).join("")}<option value="none" ${f.sp==="none" ? "selected" : ""}>Not set</option></select></label>` : ""}
+    <label class="row note" for="qf-sort" style="gap:6px">Sort<select id="qf-sort" style="width:auto">
+      <option value="new" ${f.sort==="new" ? "selected" : ""}>Newest first</option><option value="old" ${f.sort==="old" ? "selected" : ""}>Oldest first</option>
+      <option value="amtDesc" ${f.sort==="amtDesc" ? "selected" : ""}>Amount: highest first</option><option value="amtAsc" ${f.sort==="amtAsc" ? "selected" : ""}>Amount: lowest first</option></select></label>
+  </div>
   <div class="list">${
     !state.loaded && !state.slow ? `<div class="empty">Loading quotes…</div>` :
-    list.length ? list.map(q => { const c = calc(q); return `
+    list.length ? list.map(q => { const sp = quoteSp(q); return `
       <button class="qrow" data-open="${esc(q.id)}">
         <div><div class="qno">${esc(q.number)}</div><div class="qmeta">${fmtDate(q.date)}</div></div>
-        <div class="qname"><b>${esc(q.client?.name||"Unnamed client")}</b><span class="qmeta">${esc(q.client?.company||q.client?.phone||"")}</span></div>
+        <div class="qname"><b>${esc(q.client?.name||"Unnamed client")}</b><span class="qmeta">${esc([q.client?.company||q.client?.phone||"", sp ? "Salesperson: " + sp.name : "Salesperson: not set"].filter(Boolean).join(" · "))}</span></div>
         <span class="pill ${esc(q.status)}">${esc(q.status)}</span>
-        <div class="amt">Rs. ${inr(c.grand,0)}</div>
+        <div class="amt">Rs. ${inr(tot.get(q),0)}</div>
       </button>`;}).join("") :
-    state.quotes.length ? `<div class="empty">No quote matches "${esc(state.search)}".</div>` :
+    state.quotes.length ? `<div class="empty">No quote matches${s ? ` "${esc(state.search)}"` : ""}${f.sp ? " for this salesperson" : ""}.</div>` :
     `<div class="empty">No quotes yet. Tap <b>New quote</b> to make the first one. Saved quotes appear here for everyone in the office.</div>`
   }</div>`;
 }
@@ -841,6 +857,8 @@ function viewFirm(){
 /* ---------- binding ---------- */
 function bind(){
   const on = (id, ev, fn) => { const el = document.getElementById(id); if(el) el.addEventListener(ev, fn); };
+  on("qf-sp","change", e => { state.qf.sp = e.target.value; rerenderKeep("qf-sp"); });
+  on("qf-sort","change", e => { state.qf.sort = e.target.value; rerenderKeep("qf-sort"); });
   on("search","input", e => { state.search = e.target.value; const pos=e.target.selectionStart; render(); const s=$("#search"); s.focus(); s.setSelectionRange(pos,pos); });
   on("newQ","click", () => openQuote(newQuote()));
   on("exportCsv","click", exportCsv);
@@ -964,7 +982,7 @@ async function saveQuote(){
   const body = clone(q); delete body.id;
   body.items = body.items.filter(it => it.name.trim() || num(it.rate)).map(it => ({...it, qty:num(it.qty), rate:num(it.rate), disc:num(it.disc), gst:num(it.gst)}));
   body.freight = num(body.freight); body.freightGst = num(body.freightGst);
-  body.grandTotal = calc(body).grand; body.updatedAt = new Date().toISOString(); if(!q.id) body.createdAt = body.updatedAt;
+  body.grandTotal = calc(body).grand; body.updatedAt = new Date().toISOString(); if(!q.id) body.createdAt = body.updatedAt; if(!body.createdBy && gate.me) body.createdBy = {id:gate.me.id, name:gate.me.name};
   try{
     const ref = q.id ? db.collection("quotes").doc(q.id) : db.collection("quotes").doc();
     await ref.set(body); q.id = ref.id;
